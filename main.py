@@ -6,11 +6,8 @@ from systray import SystemTray
 
 vbaClientWhDl = 0
 
-def main():
-    
-    syst = SystemTray()
-    syst.startSysTray()
 
+def main():
     win32gui.EnumWindows(callback, None)
 
     print("ts:")
@@ -26,14 +23,16 @@ def main():
         win32gui.SetActiveWindow(vbaClientWhDl)
         print(win32gui.GetCaretPos())
     finally:
-        win32process.AttachThreadInput(current_thread, fg_thread, False) #detach
-    
+        win32process.AttachThreadInput(current_thread, fg_thread, False)  # detach
+
     time.sleep(40)
+
 
 def callback(hwnd, extra):
     global vbaClientWhDl
     if "Microsoft Visual Basic" in win32gui.GetWindowText(hwnd):
         print(f"window text: '{win32gui.GetWindowText(hwnd)}'")
         vbaClientWhDl = hwnd
+
 
 main()

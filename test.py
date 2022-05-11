@@ -4,18 +4,18 @@ import keyboard
 import win32gui
 import win32process
 import win32api
+import win32clipboard
 import time
-from pynput.keyboard import Key, Controller
+import math
 
-inputKey = Controller()
 hover_text = "JBVBA"
 vbaClientWhDl = -1
+
 quitApp = False
 
 
 def bye(sysTrayIcon):
     global quitApp
-    keyboard.stop_recording()
     quitApp = True
     print('Bye, then.')
 
@@ -40,24 +40,103 @@ def checkIfVBAIDEHasFocus() -> Boolean:
         return False
 
 
-cpt = 0
+# Get the current position of the caret in the VBA window
+# It return a tuple -> ( x, y ) where x is the column and y is the line.
+# 34 is the first column and each column is 8 wide : 34 + 8x
+# 30 is the first line and each line is 16 high : 30 + 16y
+def getCaretPosition() -> tuple:
+    caret_position = (0, 0)
+    fg_thread, fg_process = win32process.GetWindowThreadProcessId(vbaClientWhDl)
+    current_thread = win32api.GetCurrentThreadId()
+    win32process.AttachThreadInput(current_thread, fg_thread, True)
+    try:
+        win32gui.SetActiveWindow(vbaClientWhDl)
+        caret_position = win32gui.GetCaretPos()
+    finally:
+        win32process.AttachThreadInput(current_thread, fg_thread, False)  # detach
+        return caret_position
+
+
+def getCaretColumn() -> int:
+    if checkIfVBAIDEHasFocus():
+        # print("Column caret : " + str(getCaretPosition()[0]))
+        return getCaretPosition()[0]
+
+
+def getCaretLine() -> int:
+    if checkIfVBAIDEHasFocus():
+        # print("Line caret : " + str(getCaretPosition()[1]))
+        return getCaretPosition()[1]
+
+
+def isCaretAtBeginningOfLine() -> Boolean:
+    if checkIfVBAIDEHasFocus():
+        if getCaretColumn() == 34:
+            return True
+    return False
+
+
+def getLineNumber() -> int:
+    if checkIfVBAIDEHasFocus():
+        caret_line = getCaretLine()
+        if caret_line == 30:
+            print("Line : 1")
+            return 1
+        if caret_line > 30:
+            print("Line : " + str(math.ceil((caret_line - 30) / 16) + 1))
+            return math.ceil((caret_line - 30) / 16) + 1
+        return -1
+
+
+def getColumnNumber() -> int:
+    if checkIfVBAIDEHasFocus():
+        caret_column = getCaretColumn()
+        if caret_column == 34:
+            print("Column : 1")
+            return 1
+        if caret_column > 34:
+            print("Column : " + str(math.ceil((caret_column - 34) / 8) + 1))
+            return math.ceil((caret_column - 34) / 8) + 1
+        return -1
+
+
+def getCaretAtBegin():
+    if checkIfVBAIDEHasFocus():
+        while not isCaretAtBeginningOfLine():
+            keyboard.send('home')
 
 
 def commentLine():
-    global cpt
     if checkIfVBAIDEHasFocus():
-        cpt = cpt + 1
-        print("ok " + str(cpt))
-        inputKey.tap(Key.home)
-        # inputKey.press("'")
-        # inputKey.press(Key.end)
+        getCaretAtBegin()
+        keyboard.send("'")
+        keyboard.send('end')
+
+
+def getSelection():
+    test_var = ""
+    if checkIfVBAIDEHasFocus():
+        win32clipboard.OpenClipboard(vbaClientWhDl)
+        win32clipboard.EmptyClipboard()
+        keyboard.press('ctrl')
+        keyboard.press('c')
+        #todo here
+        keyboard.release('ctrl')
+        keyboard.release('c')
+        print(win32clipboard.GetClipboardData(1))
+        win32clipboard.CloseClipboard()
 
 
 def start():
-    keyboard.add_hotkey('ctrl+/', commentLine, timeout=40000)
+    keyboard.add_hotkey('ctrl+/', commentLine, suppress=True)
+    keyboard.add_hotkey('ctrl+*', getSelection, suppress=True)
 
-    # start the keylogger
+    # start keylogger
     # keyboard.on_press(callback=callback)
+
+    while not quitApp:
+        checkIfVBAIDEHasFocus()
+        time.sleep(0.2)
 
 
 def callback(event):
@@ -83,7 +162,3 @@ sysTrayIcon = SysTrayIcon("ok.ico", hover_text, on_quit=bye, default_menu_index=
 sysTrayIcon.start()
 
 start()
-
-while not quitApp:
-    checkIfVBAIDEHasFocus()
-    time.sleep(0.2)
