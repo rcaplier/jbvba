@@ -34,17 +34,15 @@ def cbGetCodeWin(hwnd, param):
 # Callback to get VBA windows handle AND code window handle (only work if code window is maximised for now)
 def cbGetVBAWin(hwnd, extra):
     global vbaClientWhDl, codeWhDl
-    if "Microsoft Visual Basic" in win32gui.GetWindowText(hwnd):
+    if "Microsoft Visual Basic for Applications" in win32gui.GetWindowText(hwnd):
         vbaClientWhDl = hwnd
         main_window_title = win32gui.GetWindowText(hwnd)
-        if len(main_window_title.split("-")) == 3:  # if code window is maximised there is the name of
-            # the window appended to the main VBA window title (separated by a new "-")
 
+        # if code window is maximised, then it will be printed in the main window title between brackets
+        if "[" in main_window_title:
             # We have to clean it first (remove the brackets around)
-            code_window_title = str(main_window_title.split("-")[2]).strip()
-
-            if "[" in code_window_title and "]" in code_window_title:
-                code_window_title = code_window_title.replace("[", "", 1)
+            code_window_title = str(main_window_title.split("[")[1]).strip()
+            if "]" in code_window_title:
                 code_window_title = code_window_title.replace("]", "", 1)
 
             win32gui.EnumChildWindows(vbaClientWhDl, cbGetCodeWin, code_window_title)
@@ -141,12 +139,38 @@ def test4cb(hwnd, param):
     print(str(hwnd))
 
 
+def GetCaretWindowText(hWndCaret, Selected=False):  # As String
+
+    startpos = 0
+    endpos = 0
+
+    txt = ""
+
+    if hWndCaret:
+
+        buf_size = 1 + win32gui.SendMessage(hWndCaret, win32con.WM_GETTEXTLENGTH, 0, 0)
+        if buf_size:
+            buffer = win32gui.PyMakeBuffer(buf_size)
+            win32gui.SendMessage(hWndCaret, win32con.WM_GETTEXT, buf_size, buffer)
+            address, length = win32gui.PyGetBufferAddressAndLen(buffer)
+            txt = win32gui.PyGetString(address, length)
+            # txt = buffer[:buf_size]
+
+        if Selected and buf_size:
+            selinfo = win32gui.SendMessage(hWndCaret, win32con.EM_GETSEL, 0, 0)
+            endpos = win32api.HIWORD(selinfo)
+            startpos = win32api.LOWORD(selinfo)
+            return txt[startpos: endpos]
+
+    return txt
+
+
 def test3cb(hwnd, param):
     print(win32gui.GetClassName(hwnd))
+    print(GetCaretWindowText(hwnd))
     if win32gui.GetClassName(hwnd) == "ObtbarWndClass":
-        test = win32gui.EnumChildWindows(hwnd, test4cb, None)
-        print("test")
-        print(str(test))
+        code_pane = hwnd
+
         # test = win32gui.GetDlgCtrlID(hwnd)
         # print(test)
 
@@ -154,8 +178,7 @@ def test3cb(hwnd, param):
 
         # test = win32gui.SendMessage(test, win32con.CB_GETLBTEXTLEN, 0, 0)
         # print(str(test))
-
-        cb_len = win32gui.SendMessage(hwnd, win32con.EM_GETSEL, 0, 0)
+        cb_len = win32gui.SendMessage(hwnd, win32con.WM_GETTEXTLENGTH, 0, 0)
         print("Text length : " + str(cb_len))
         # buffer = win32gui.PyMakeBuffer(cb_len)
         # test = win32gui.SendMessage(hwnd, win32con.CB_GETLBTEXT, 0, buffer)
@@ -165,13 +188,13 @@ def test3cb(hwnd, param):
 
         buffer = win32gui.PyMakeBuffer(cb_len)
 
-        win32gui.SendMessage(hwnd, win32con.WM_GETTEXTLENGTH, cb_len, buffer)  # read the text
+        win32gui.SendMessage(hwnd, win32con.WM_GETTEXT, cb_len, buffer)  # read the text
 
         address, length = win32gui.PyGetBufferAddressAndLen(buffer)
 
         text = win32gui.PyGetString(address, length)
 
-        print(text)
+        print("text: " + text)
     return True
 
 
@@ -182,10 +205,12 @@ def getProjectCB(hwnd, param):
 
 
 def getSelection():
-    test_var = ""
     if checkIfVBAIDEHasFocus():
-        resp = win32gui.SendMessage(codeWhDl, win32con.WM_COPY, None, None)
-        print(str(resp))
+        # resp = win32gui.SendMessage(codeWhDl, win32con.WM_COPY, None, None)
+        # print(str(resp))
+
+        test_var = win32gui.GetClassName(codeWhDl)
+        print(str(test_var))
 
         win32gui.EnumChildWindows(codeWhDl, test3cb, None)
 
